@@ -114,3 +114,10 @@ python3 -m http.server 8000 --directory tools/web-flasher
 - All communications use Web Bluetooth's built-in security
 - Firmware is downloaded directly from GitHub releases
 - No credentials or keys stored locally
+
+
+## Browser-based load-cell calibration
+
+The Web Flasher includes a **Calibration** tab for running the load-cell calibration workflow over Bluetooth, without relying on the grinder display. Connect to the grinder, choose **Start / Restart**, then follow the on-page step instructions. The **Continue / Finish** button advances the existing firmware calibration flow; the reference weight can be adjusted with the +/- controls. Keep the grinder and scale still during the noise check.
+
+This feature requires firmware built with the matching BLE calibration command/status support. Use a Chromium-based browser (Chrome or Edge) over HTTPS.

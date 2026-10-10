@@ -79,6 +79,9 @@ private:
     int current_tab;
     GrindMode current_mode;
     bool initialized;
+    volatile uint8_t web_calibration_command_ = 0;
+    volatile uint8_t web_calibration_value_ = 0;
+    unsigned long last_web_calibration_status_ms_ = 0;
     unsigned long jog_start_time;
     int jog_stage;
     int jog_direction;
@@ -117,6 +120,7 @@ public:
     void init(HardwareManager* hw_mgr, StateMachine* sm, 
               ProfileController* pc, GrindController* gc, BluetoothManager* bluetooth);
     void update();
+    bool queue_web_calibration_command(uint8_t command, uint8_t value = 0);
     void switch_to_state(UIState new_state);
     // Helper method to show confirmation dialog
     void show_confirmation(const char* title, const char* message,

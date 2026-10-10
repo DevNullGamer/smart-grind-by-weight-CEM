@@ -90,6 +90,7 @@ private:
     BLECharacteristic* data_control_characteristic;
     BLECharacteristic* data_transfer_characteristic;
     BLECharacteristic* data_status_characteristic;
+    BLECharacteristic* calibration_status_characteristic;
     
     // Debug characteristics
     BLECharacteristic* debug_rx_characteristic;
@@ -144,6 +145,7 @@ private:
     void handle_ota_data_chunk(BLECharacteristic* characteristic);
     void handle_debug_command(BLECharacteristic* characteristic);
     void handle_data_control_command(BLECharacteristic* characteristic);
+    void publish_calibration_status(const char* status);
     void handle_image_control_command(uint8_t command, const String& value);
     void set_image_status(BLEImageStatus status);
     void handle_screensaver_settings_command(uint8_t command, const String& value);
@@ -172,6 +174,7 @@ public:
      * Initialize Bluetooth manager
      */
     void init(Preferences* prefs);
+    void update_calibration_status(const char* status) { publish_calibration_status(status); }
     
     /**
      * Enable BLE and start advertising

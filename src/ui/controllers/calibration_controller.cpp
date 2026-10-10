@@ -178,6 +178,13 @@ void CalibrationUIController::handle_minus(lv_event_code_t code) {
     }
 }
 
+
+void CalibrationUIController::set_web_calibration_weight(float weight) {
+    if (!ui_manager_ || ui_manager_->calibration_screen.get_step() != CAL_STEP_WEIGHT) return;
+    weight = ui_manager_->get_profile_controller()->clamp_weight(weight);
+    ui_manager_->calibration_screen.update_calibration_weight(weight);
+}
+
 void CalibrationUIController::start_noise_check() {
     noise_step_enter_ms_ = millis();
     noise_ok_since_ms_ = 0;

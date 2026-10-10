@@ -16,6 +16,7 @@ public:
     void handle_cancel();
     void handle_plus(lv_event_code_t code);
     void handle_minus(lv_event_code_t code);
+    void set_web_calibration_weight(float weight);
 
 private:
     UIManager* ui_manager_;

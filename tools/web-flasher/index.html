@@ -281,6 +281,7 @@
             <button class="tab active" onclick="showTab('ota')">OTA Update (BLE)</button>
             <button class="tab" onclick="showTab('initial')">Initial Setup (USB)</button>
             <button class="tab" onclick="showTab('screensaver')">Screensaver</button>
+            <button class="tab" onclick="showTab('calibration')">Calibration</button>
             <button class="tab" onclick="showTab('diagnostics')">Diagnostics</button>
         </div>
         
@@ -413,6 +414,32 @@
 
             <div style="margin-top: 20px;">
                 <button class="btn" id="deleteScreensaverBtn" onclick="deleteScreensaver()" style="background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);">Delete Image from Device</button>
+            </div>
+        </div>
+
+        <!-- Remote calibration Tab -->
+        <div id="calibrationTab" class="tab-content">
+            <div class="section">
+                <h3>⚖️ Load-cell calibration</h3>
+                <p>Calibrate the grinder without using its physical display. Keep the grinder on a stable surface. Remove all objects from the scale when prompted, then use a known reference weight.</p>
+                <p><strong>Safety:</strong> this changes the scale calibration stored by the device. Do not touch or move the grinder during the noise check.</p>
+            </div>
+            <div class="section">
+                <div id="calibrationConnectionStatus" class="status info">Not connected</div>
+                <p>Step: <strong id="calibrationStep">Not connected</strong></p>
+                <p>Live scale reading: <strong id="calibrationReading">-- g</strong></p>
+                <p>Reference weight: <strong id="calibrationReference">-- g</strong></p>
+                <div class="button-row">
+                    <button class="btn" id="calibrationConnectBtn" onclick="connectCalibration()">Connect to Grinder</button>
+                    <button class="btn" onclick="calibrationCommand(0x50)">Start / Restart</button>
+                </div>
+                <div class="button-row" style="margin-top:10px">
+                    <button class="btn" onclick="calibrationCommand(0x52)">Cancel</button>
+                    <button class="btn" onclick="calibrationCommand(0x54)">− Reference</button>
+                    <button class="btn" onclick="calibrationCommand(0x55)">+ Reference</button>
+                    <button class="btn" onclick="calibrationCommand(0x51)">Continue / Finish</button>
+                </div>
+                <p id="calibrationHelp">Connect, then select Start / Restart. Follow the steps shown here.</p>
             </div>
         </div>
 

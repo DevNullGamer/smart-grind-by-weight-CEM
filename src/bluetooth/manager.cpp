@@ -20,6 +20,7 @@
 #include "../hardware/WeightSensor.h"
 #include "../controllers/grind_controller.h"
 #include "../network/device_web_server.h"
+#include "../ui/ui_manager.h"
 
 extern HardwareManager hardware_manager;
 extern GrindController grind_controller;
@@ -37,6 +38,7 @@ BluetoothManager::BluetoothManager()
     , data_control_characteristic(nullptr)
     , data_transfer_characteristic(nullptr)
     , data_status_characteristic(nullptr)
+    , calibration_status_characteristic(nullptr)
     , debug_rx_characteristic(nullptr)
     , debug_tx_characteristic(nullptr)
     , sysinfo_system_characteristic(nullptr)
@@ -186,6 +188,12 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     data_transfer_characteristic->setCallbacks(this);
     delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
     
+    calibration_status_characteristic = data_service->createCharacteristic(
+        BLEUUID("66778899-aabb-ccdd-eeff-112233445577"),
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+    calibration_status_characteristic->addDescriptor(new BLE2902());
+    calibration_status_characteristic->setValue("{\"step\":\"idle\",\"weight\":0}");
+
     data_status_characteristic = data_service->createCharacteristic(
         BLE_DATA_STATUS_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
@@ -336,6 +344,7 @@ void BluetoothManager::disable() {
     data_control_characteristic = nullptr;
     data_transfer_characteristic = nullptr;
     data_status_characteristic = nullptr;
+    calibration_status_characteristic = nullptr;
     debug_rx_characteristic = nullptr;
     debug_tx_characteristic = nullptr;
     sysinfo_system_characteristic = nullptr;
@@ -850,6 +859,15 @@ void BluetoothManager::handle_data_control_command(BLECharacteristic* characteri
         return;
     }
     
+    if (command >= 0x50 && command <= 0x55) {
+        UIManager* ui = UIManager::get_instance();
+        if (!ui || !ui->queue_web_calibration_command(command, data.length() > 1 ? (uint8_t)data[1] : 0)) {
+            log("Bluetooth Calibration: command rejected\n");
+            publish_calibration_status("{\"error\":\"busy\"}");
+        }
+        return;
+    }
+
     switch (command) {
         case BLE_DATA_CMD_STOP_EXPORT:
             log("Bluetooth Data: Stopping measurement data export\n");
@@ -901,6 +919,13 @@ void BluetoothManager::handle_data_control_command(BLECharacteristic* characteri
             set_data_status(BLE_DATA_ERROR);
             break;
     }
+}
+
+void BluetoothManager::publish_calibration_status(const char* status) {
+    if (!calibration_status_characteristic || !status) return;
+    if (calibration_status_characteristic->getValue() == String(status)) return;
+    calibration_status_characteristic->setValue(status);
+    if (device_connected) calibration_status_characteristic->notify();
 }
 
 // BLE Callbacks

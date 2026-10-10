@@ -25,6 +25,7 @@ const BLE_DATA_CONTROL_CHAR_UUID = '33445566-7788-99aa-bbcc-ddeeffaabbcc';
 const BLE_DATA_TRANSFER_CHAR_UUID = '44556677-8899-aabb-ccdd-eeffaabbccdd';
 const BLE_DATA_STATUS_CHAR_UUID = '55667788-99aa-bbcc-ddee-ffaabbccddee';
 const BLE_DATA_SERVICE_UUID = '22334455-6677-8899-aabb-ccddeeffffaa';
+const BLE_CALIBRATION_STATUS_CHAR_UUID = '66778899-aabb-ccdd-eeff-112233445577';
 
 // Image upload commands (0x30+ range, sent via data control characteristic)
 const BLE_IMG_CMD_START = 0x30;
@@ -806,6 +807,85 @@ async function connectScreensaverDataService() {
         controlChar: await dataService.getCharacteristic(BLE_DATA_CONTROL_CHAR_UUID),
         statusChar: await dataService.getCharacteristic(BLE_DATA_STATUS_CHAR_UUID)
     };
+}
+
+let calibrationConnection = null;
+let calibrationPollTimer = null;
+
+async function connectCalibration() {
+    try {
+        if (!navigator.bluetooth) throw new Error('Web Bluetooth is not supported. Use Chrome or Edge over HTTPS.');
+        if (calibrationConnection?.bleDevice?.gatt?.connected) {
+            setCalibrationMessage('Already connected.');
+            return;
+        }
+        setCalibrationMessage('Choose your grinder in the Bluetooth prompt…');
+        const bleDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ name: DEVICE_NAME }],
+            optionalServices: [BLE_DATA_SERVICE_UUID]
+        });
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(BLE_DATA_SERVICE_UUID);
+        const controlChar = await service.getCharacteristic(BLE_DATA_CONTROL_CHAR_UUID);
+        const statusChar = await service.getCharacteristic(BLE_CALIBRATION_STATUS_CHAR_UUID);
+        calibrationConnection = { bleDevice, controlChar, statusChar };
+        bleDevice.addEventListener('gattserverdisconnected', () => {
+            calibrationConnection = null;
+            if (calibrationPollTimer) clearInterval(calibrationPollTimer);
+            calibrationPollTimer = null;
+            setCalibrationMessage('Disconnected. Reconnect to continue.');
+        });
+        await statusChar.startNotifications();
+        statusChar.addEventListener('characteristicvaluechanged', event => {
+            try { renderCalibrationStatus(JSON.parse(new TextDecoder().decode(event.target.value))); }
+            catch (error) { console.warn('Invalid calibration status', error); }
+        });
+        renderCalibrationStatus(JSON.parse(new TextDecoder().decode((await statusChar.readValue()))));
+        calibrationPollTimer = setInterval(async () => {
+            try {
+                if (calibrationConnection?.bleDevice?.gatt?.connected) {
+                    const value = await calibrationConnection.statusChar.readValue();
+                    renderCalibrationStatus(JSON.parse(new TextDecoder().decode(value)));
+                }
+            } catch (error) { console.warn('Could not refresh calibration status', error); }
+        }, 1000);
+        setCalibrationMessage('Connected. Start calibration when ready.');
+    } catch (error) {
+        setCalibrationMessage(error.message || String(error), true);
+    }
+}
+
+async function calibrationCommand(command) {
+    try {
+        if (!calibrationConnection?.bleDevice?.gatt?.connected) throw new Error('Connect to the grinder first.');
+        await calibrationConnection.controlChar.writeValue(Uint8Array.of(command));
+        setCalibrationMessage('Command sent.');
+    } catch (error) {
+        setCalibrationMessage(error.message || String(error), true);
+    }
+}
+
+function renderCalibrationStatus(status) {
+    if (status.error) {
+        setCalibrationMessage('Device rejected the command: ' + status.error, true);
+        return;
+    }
+    const labels = {
+        idle: 'Ready to start', empty: 'Step 1 — Remove all weight, then Continue',
+        weight: 'Step 2 — Place a known weight; adjust reference if needed, then Continue',
+        noise_check: 'Step 3 — Keep still while the scale noise is checked',
+        complete: 'Calibration complete — press Continue / Finish to exit'
+    };
+    document.getElementById('calibrationStep').textContent = labels[status.step] || status.step || 'Unknown';
+    document.getElementById('calibrationReading').textContent = Number(status.weight || 0).toFixed(2) + ' g';
+    document.getElementById('calibrationReference').textContent = Number(status.reference || 0).toFixed(1) + ' g';
+}
+
+function setCalibrationMessage(message, isError = false) {
+    const element = document.getElementById('calibrationConnectionStatus');
+    if (!element) return;
+    element.textContent = message;
+    element.className = 'status ' + (isError ? 'error' : 'info');
 }
 
 function disconnectBleDevice(bleDevice) {

@@ -11,6 +11,7 @@
 #include "../network/device_api.h"
 #endif
 #include <utility>
+#include <cstdio>
 // Static instance pointer for grind event callbacks
 UIManager* UIManager::instance = nullptr;
 
@@ -134,8 +135,57 @@ void UIManager::create_ui() {
     switch_to_state(state_machine->get_current_state());
 }
 
+bool UIManager::queue_web_calibration_command(uint8_t command, uint8_t value) {
+    if (web_calibration_command_ != 0) return false;
+    if (command < 0x50 || command > 0x55) return false;
+    web_calibration_value_ = value;
+    web_calibration_command_ = command;
+    return true;
+}
+
 void UIManager::update() {
     if (!initialized) return;
+
+    // BLE callbacks only enqueue requests; all LVGL and calibration operations
+    // execute here on the UI task.
+    uint8_t web_command = web_calibration_command_;
+    uint8_t web_value = web_calibration_value_;
+    if (web_command != 0) {
+        web_calibration_command_ = 0;
+        if (web_command == 0x50) {
+            if (state_machine->get_current_state() == UIState::CALIBRATION && calibration_controller_) {
+                calibration_controller_->handle_cancel();
+            }
+            switch_to_state(UIState::CALIBRATION);
+        } else if (calibration_controller_ && state_machine->get_current_state() == UIState::CALIBRATION) {
+            switch (web_command) {
+                case 0x51: calibration_controller_->handle_ok(); break;
+                case 0x52: calibration_controller_->handle_cancel(); break;
+                case 0x53: calibration_controller_->set_web_calibration_weight(web_value / 10.0f); break;
+                case 0x54: calibration_controller_->handle_minus(LV_EVENT_CLICKED); break;
+                case 0x55: calibration_controller_->handle_plus(LV_EVENT_CLICKED); break;
+            }
+        }
+    }
+    if (bluetooth_manager_ && state_machine &&
+        millis() - last_web_calibration_status_ms_ >= 500) {
+        last_web_calibration_status_ms_ = millis();
+        const char* step = "idle";
+        if (state_machine->get_current_state() == UIState::CALIBRATION) {
+            switch (calibration_screen.get_step()) {
+                case CAL_STEP_EMPTY: step = "empty"; break;
+                case CAL_STEP_WEIGHT: step = "weight"; break;
+                case CAL_STEP_NOISE_CHECK: step = "noise_check"; break;
+                case CAL_STEP_COMPLETE: step = "complete"; break;
+            }
+        }
+        char status[96];
+        float weight = hardware_manager && hardware_manager->get_weight_sensor()
+            ? hardware_manager->get_weight_sensor()->get_display_weight() : 0.0f;
+        snprintf(status, sizeof(status), "{\"step\":\"%s\",\"weight\":%.2f,\"reference\":%.1f}",
+                 step, weight, calibration_screen.get_calibration_weight());
+        bluetooth_manager_->update_calibration_status(status);
+    }
 
 #ifndef SMART_GRIND_SIM
     // Execute network commands on the UI/application task, never in the
